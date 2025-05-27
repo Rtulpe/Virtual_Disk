@@ -24,3 +24,23 @@ After building, run the program:
 
 Commands list:
 **[dmake dremove dput dget ddel dls dmap help about]**
+
+Upsides and downsides:
+
+- **Upsides**:
+  - Relatively simple.
+  - Little abstaction.
+  - Single file, no dependencies.
+  - Similar to FAT.
+  - Directory and FAT are at fixed positions.
+  - Able to see the memory usage.
+  - External fragmentation is not a problem, due to FAT-like structure.
+
+- **Downsides**:
+  - No subdirectories.
+  - Incredibly basic, just bare minimum.
+  - Scalability is not considered.
+  - Concurrency is not considered.
+  - Not suitable for proper OS.
+  - Internal fragmentation is a problem, due to fixed-size blocks.
+  - File limit (64 files), drive size limit (4KB to 100MB), but can be changed in the code.
