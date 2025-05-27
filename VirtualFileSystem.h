@@ -33,7 +33,7 @@ struct SuperBlock {
 #pragma pack(pop)
 
 // Directory entry structure
-#pragma pack(push, 1
+#pragma pack(push, 1)
 struct DirEntry {
     char name[32];          // File name (null-terminated, thus can vary in length)
     uint64_t size;          // File size in bytes
@@ -45,7 +45,7 @@ struct DirEntry {
 
 class VirtualFileSystem {
 public:
-    explicit VirtualFileSystem(const std::string &diskPath); // Not sure what explicit does, but CLANG recommends
+    explicit VirtualFileSystem(std::string diskPath); // Not sure what explicit does, but CLANG recommends
     ~VirtualFileSystem();
 
     // Perform formatting and create a new virtual disk
@@ -66,7 +66,7 @@ public:
 private:
     std::string diskPath;               // Path to the disk file
     std::fstream disk;                  // File stream for disk
-    SuperBlock sb;                      // METAINFO
+    SuperBlock sb{};                      // METAINFO
     std::vector<DirEntry> directory;    // Dir table
     std::vector<int32_t> FAT;           // File Allocation Table
 
