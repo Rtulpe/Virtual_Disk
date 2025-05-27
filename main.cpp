@@ -29,11 +29,10 @@ int main(const int argc, char *argv[]) {
         return 1;
     }
 
-    string cmd = argv[1];
     // Complaint: 'string' not being allowed in a switch statement, ridiculous
     // Thus using good-old if-else chain instead
 
-    if (cmd == "dmake") {
+    if (const string cmd = argv[1]; cmd == "dmake") {
         if (argc < 3) {
             printUsage(argv[0]);
             return 1;
@@ -42,7 +41,7 @@ int main(const int argc, char *argv[]) {
         const string diskName = argv[2];
         uint32_t size = DEFAULT_DISK_SIZE;
         if (argc >= 4) {
-            size = (uint32_t) stoul(argv[3]);
+            size = static_cast<uint32_t>(stoul(argv[3]));
         }
         if (VirtualFileSystem vfs(diskName); !vfs.createDisk(size)) return 1;
 
