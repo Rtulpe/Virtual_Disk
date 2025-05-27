@@ -7,18 +7,19 @@
 #include <iomanip>
 #include <cstdio>      // for remove()
 #include <algorithm>
+#include <utility> // for std::move
 
 using namespace std;
 
-// Special FAT markers
-static const int32_t FAT_FREE = 0;      // Block is free
-static const int32_t FAT_EOF = -1;      // End-of-file chain
-static const int32_t FAT_RESERVED = -2; // Reserved for metadata (not usable by files)
+// Special FAT markers (constexpr was suggested by CLANG-Tidy)
+static constexpr int32_t FAT_FREE = 0;      // Block is free
+static constexpr int32_t FAT_EOF = -1;      // End-of-file chain
+static constexpr int32_t FAT_RESERVED = -2; // Reserved for metadata (not usable by files)
 
 // Constructor: initialize internal structures
-VirtualFileSystem::VirtualFileSystem(const std::string &path)
-    : diskPath(path), directory(MAX_FILES), FAT() {
-    // Reserve directory entries; FAT will be sized on disk load/create
+VirtualFileSystem::VirtualFileSystem(std::string diskPath)
+    : diskPath(std::move(diskPath)), directory(MAX_FILES) {
+    // Reserve directory entries.
 }
 
 // Destructor: close disk file if open
@@ -46,7 +47,7 @@ bool VirtualFileSystem::createDisk(uint32_t diskSize) {
     }
     // Seek to last byte and write a zero to allocate space
     out.seekp(diskSize - 1);
-    char zero = '\0';
+    constexpr char zero = '\0';
     out.write(&zero, 1);
     out.close();
 
@@ -65,11 +66,11 @@ bool VirtualFileSystem::createDisk(uint32_t diskSize) {
     sb.totalDirEntries= MAX_FILES;
     sb.dirStartBlock  = 1;
     // Calculate blocks for directory
-    uint32_t dirBytes = MAX_FILES * sizeof(DirEntry);
+    constexpr uint32_t dirBytes = MAX_FILES * sizeof(DirEntry);
     sb.dirBlockCount  = (dirBytes + BLOCK_SIZE - 1) / BLOCK_SIZE;
     sb.fatStartBlock  = sb.dirStartBlock + sb.dirBlockCount;
     // Calculate blocks for FAT (one int32 per block)
-    uint32_t fatBytes = sb.totalBlocks * sizeof(int32_t);
+    const uint32_t fatBytes = sb.totalBlocks * sizeof(int32_t);
     sb.fatBlockCount  = (fatBytes + BLOCK_SIZE - 1) / BLOCK_SIZE;
     sb.dataStartBlock = sb.fatStartBlock + sb.fatBlockCount;
 
@@ -128,8 +129,8 @@ bool VirtualFileSystem::writeSuperblock() {
     disk.seekp(0);
     disk.write(reinterpret_cast<char*>(&sb), sizeof(sb));
     // Pad remaining bytes of block with zeros, if any
-    if (sizeof(sb) < BLOCK_SIZE) {
-        vector<char> pad(BLOCK_SIZE - sizeof(sb), 0);
+    if constexpr (sizeof(sb) < BLOCK_SIZE) {
+        const vector<char> pad(BLOCK_SIZE - sizeof(sb), 0);
         disk.write(pad.data(), pad.size());
     }
     return disk.good();
@@ -148,10 +149,9 @@ bool VirtualFileSystem::writeDirectory() {
     disk.seekp(sb.dirStartBlock * BLOCK_SIZE);
     disk.write(reinterpret_cast<char*>(directory.data()), MAX_FILES * sizeof(DirEntry));
     // Pad the rest of directory blocks
-    uint32_t usedBytes = MAX_FILES * sizeof(DirEntry);
-    uint32_t totalBytes= sb.dirBlockCount * BLOCK_SIZE;
-    if (usedBytes < totalBytes) {
-        vector<char> pad(totalBytes - usedBytes, 0);
+    constexpr uint32_t usedBytes = MAX_FILES * sizeof(DirEntry);
+    if (const uint32_t totalBytes= sb.dirBlockCount * BLOCK_SIZE; usedBytes < totalBytes) {
+        const vector<char> pad(totalBytes - usedBytes, 0);
         disk.write(pad.data(), pad.size());
     }
     return disk.good();
@@ -170,17 +170,16 @@ bool VirtualFileSystem::writeFAT() {
     disk.seekp(sb.fatStartBlock * BLOCK_SIZE);
     disk.write(reinterpret_cast<char*>(FAT.data()), sb.totalBlocks * sizeof(int32_t));
     // Pad the rest of FAT blocks
-    uint32_t usedBytes = sb.totalBlocks * sizeof(int32_t);
-    uint32_t totalBytes= sb.fatBlockCount * BLOCK_SIZE;
-    if (usedBytes < totalBytes) {
-        vector<char> pad(totalBytes - usedBytes, 0);
+    const uint32_t usedBytes = sb.totalBlocks * sizeof(int32_t);
+    if (const uint32_t totalBytes= sb.fatBlockCount * BLOCK_SIZE; usedBytes < totalBytes) {
+        const vector<char> pad(totalBytes - usedBytes, 0);
         disk.write(pad.data(), pad.size());
     }
     return disk.good();
 }
 
 // Find 'count' free blocks in FAT; return true if found and fill 'blocks' vector
-bool VirtualFileSystem::findFreeBlocks(uint32_t count, vector<int32_t> &blocks) const {
+bool VirtualFileSystem::findFreeBlocks(const uint32_t count, vector<int32_t> &blocks) const {
     blocks.clear();
     for (uint32_t i = sb.dataStartBlock; i < sb.totalBlocks && blocks.size() < count; ++i) {
         if (FAT[i] == FAT_FREE) {
@@ -192,7 +191,7 @@ bool VirtualFileSystem::findFreeBlocks(uint32_t count, vector<int32_t> &blocks) 
 
 // Find directory entry index by file name; return -1 if not found
 int VirtualFileSystem::findDirectoryEntry(const string &name) const {
-    for (int i = 0; i < (int)directory.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(directory.size()); ++i) {
         if (directory[i].name[0] != '\0' && name == directory[i].name) {
             return i;
         }
@@ -236,7 +235,7 @@ bool VirtualFileSystem::copyFromHost(const std::string &hostFile) {
     }
 
     // Calculate blocks needed
-    uint32_t blocksNeeded = (uint32_t)((fileSize + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    auto blocksNeeded = static_cast<uint32_t>((fileSize + BLOCK_SIZE - 1) / BLOCK_SIZE);
     vector<int32_t> blocks;
     if (!findFreeBlocks(blocksNeeded, blocks)) {
         cerr << "Error: Not enough free space on virtual disk\n";
@@ -248,7 +247,7 @@ bool VirtualFileSystem::copyFromHost(const std::string &hostFile) {
     DirEntry &entry = directory[freeSlot];
     memset(&entry, 0, sizeof(DirEntry));
     strncpy(entry.name, fname.c_str(), sizeof(entry.name)-1);
-    entry.size       = (uint64_t)fileSize;
+    entry.size       = static_cast<uint64_t>(fileSize);
     entry.created    = time(nullptr);
     entry.type       = 'F';
     entry.firstBlock = blocks[0];
@@ -269,7 +268,7 @@ bool VirtualFileSystem::copyFromHost(const std::string &hostFile) {
         int blk = blocks[i];
         disk.seekp((uint64_t)blk * BLOCK_SIZE);
         // Compute bytes to read for this block
-        uint32_t bytesToRead = (uint32_t)min((streamsize)BLOCK_SIZE, fileSize - (streamsize)i * BLOCK_SIZE);
+        uint32_t bytesToRead = static_cast<uint32_t>(min(static_cast<streamsize>(BLOCK_SIZE), fileSize - static_cast<streamsize>(i) * BLOCK_SIZE));
         in.read(buffer, bytesToRead);
         disk.write(buffer, bytesToRead);
         // Pad remainder of block with zeros if last block not full
@@ -290,14 +289,14 @@ bool VirtualFileSystem::copyFromHost(const std::string &hostFile) {
 
 // Copy a file from the virtual disk to host filesystem
 bool VirtualFileSystem::copyToHost(const std::string &fileName, const std::string &destPath) {
-    int idx = findDirectoryEntry(fileName);
+    const int idx = findDirectoryEntry(fileName);
     if (idx < 0) {
         cerr << "Error: File '" << fileName << "' not found in virtual disk\n";
         return false;
     }
-    DirEntry &entry = directory[idx];
+    const DirEntry &entry = directory[idx];
     // Determine output path
-    string outPath = destPath.empty() ? fileName : destPath;
+    const string outPath = destPath.empty() ? fileName : destPath;
 
     ofstream out(outPath, ios::binary);
     if (!out) {
@@ -311,7 +310,7 @@ bool VirtualFileSystem::copyToHost(const std::string &fileName, const std::strin
     char buffer[BLOCK_SIZE];
     while (blk != FAT_EOF && remaining > 0) {
         disk.seekg((uint64_t)blk * BLOCK_SIZE);
-        uint32_t toRead = (uint32_t)min((uint64_t)BLOCK_SIZE, remaining);
+        const uint32_t toRead = static_cast<uint32_t>(min(static_cast<uint64_t>(BLOCK_SIZE), remaining));
         disk.read(buffer, toRead);
         out.write(buffer, toRead);
         remaining -= toRead;
@@ -325,7 +324,7 @@ bool VirtualFileSystem::copyToHost(const std::string &fileName, const std::strin
 
 // Delete a file from the virtual disk
 bool VirtualFileSystem::deleteFile(const std::string &fileName) {
-    int idx = findDirectoryEntry(fileName);
+    const int idx = findDirectoryEntry(fileName);
     if (idx < 0) {
         cerr << "Error: File '" << fileName << "' not found in virtual disk\n";
         return false;
@@ -334,7 +333,7 @@ bool VirtualFileSystem::deleteFile(const std::string &fileName) {
     // Free all blocks in the file's chain
     int32_t blk = entry.firstBlock;
     while (blk != FAT_EOF && blk != FAT_RESERVED) {
-        int32_t next = FAT[blk];
+        const int32_t next = FAT[blk];
         FAT[blk] = FAT_FREE;
         blk = next;
     }
@@ -360,7 +359,7 @@ void VirtualFileSystem::listFiles() const {
         if (entry.name[0] == '\0') continue;
         any = true;
         // Format creation time
-        std::tm *tm_info = std::localtime(&entry.created);
+        const std::tm *tm_info = std::localtime(&entry.created);
         char timestr[20];
         std::strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", tm_info);
         cout << left << setw(20) << entry.name
@@ -375,32 +374,24 @@ void VirtualFileSystem::listFiles() const {
 
 // Show the occupancy map of blocks on the virtual disk
 void VirtualFileSystem::showMap() const {
-    cout << "Block | Type       | Status\n";
-    cout << "-----------------------------\n";
-    for (uint32_t i = 0; i < sb.totalBlocks; ++i) {
-        string type, status;
-        if (i == 0) {
-            type = "Superblock";
-            status = "occupied";
-        } else if (i >= sb.dirStartBlock && i < sb.dirStartBlock + sb.dirBlockCount) {
-            type = "Directory";
-            status = "occupied";
-        } else if (i >= sb.fatStartBlock && i < sb.fatStartBlock + sb.fatBlockCount) {
-            type = "FAT";
-            status = "occupied";
-        } else {
-            // Data region
-            if (FAT[i] == FAT_FREE) {
-                type = "Free";
-                status = "free";
-            } else {
-                // Find which file this block belongs to
-                string fname = "";
+    cout << "Range            | Type           | Status\n";
+    cout << "-----------------------------------------------\n";
+
+    auto describe_block = [&](uint32_t i) -> pair<string, string> {
+        if (i == 0) return {"Superblock", "occupied"};
+        else if (i >= sb.dirStartBlock && i < sb.dirStartBlock + sb.dirBlockCount)
+            return {"Directory", "occupied"};
+        else if (i >= sb.fatStartBlock && i < sb.fatStartBlock + sb.fatBlockCount)
+            return {"FAT", "occupied"};
+        else {
+            if (FAT[i] == FAT_FREE) return {"Free", "free"};
+            else {
+                string fname;
                 for (const auto &entry : directory) {
                     if (entry.name[0] == '\0') continue;
                     int32_t blk = entry.firstBlock;
                     while (blk != FAT_EOF && blk >= 0) {
-                        if ((uint32_t)blk == i) {
+                        if (static_cast<uint32_t>(blk) == i) {
                             fname = entry.name;
                             break;
                         }
@@ -408,18 +399,30 @@ void VirtualFileSystem::showMap() const {
                     }
                     if (!fname.empty()) break;
                 }
-                if (!fname.empty()) {
-                    type = "File(" + fname + ")";
-                    status = "occupied";
-                } else {
-                    type = "Unknown";
-                    status = "occupied";
-                }
+                return !fname.empty() ? make_pair("File(" + fname + ")", "occupied")
+                                      : make_pair("Unknown", "occupied");
             }
         }
-        cout << setw(5) << i << " | " << setw(10) << type << " | " << status << "\n";
+    };
+
+    uint32_t start = 0;
+    auto [currType, currStatus] = describe_block(0);
+
+    for (uint32_t i = 1; i < sb.totalBlocks; ++i) {
+        if (auto [type, status] = describe_block(i); type != currType || status != currStatus) {
+            cout << setw(4) << start << "-" << setw(4) << i - 1 << "        | "
+                 << setw(13) << currType << " | " << currStatus << "\n";
+            start = i;
+            currType = type;
+            currStatus = status;
+        }
     }
+
+    // Final group
+    cout << setw(4) << start << "-" << setw(4) << sb.totalBlocks - 1 << "        | "
+         << setw(13) << currType << " | " << currStatus << "\n";
 }
+
 
 // Delete the virtual disk file
 bool VirtualFileSystem::removeDisk() {
