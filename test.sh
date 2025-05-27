@@ -10,7 +10,7 @@ echo -e "\nListing files on new disk (should be empty):"
 
 # Prepare some host files
 echo -e "\nCreating host files file1.txt and file2.bin..."
-echo "Hello, Virtual FS!" > file1.txt
+echo "Hello, TTvfs!" > file1.txt
 dd if=/dev/urandom of=file2.bin bs=512 count=2 2>/dev/null
 
 # Copy files into virtual disk
@@ -49,4 +49,4 @@ echo "Size of output2.bin: $(stat --printf="%s" output2.bin) bytes"
 
 # Clean up: delete virtual disk
 echo -e "\nRemoving virtual disk 'disk.vd'..."
-./vfs rmdisk disk.vd
+./vfs dremove disk.vd
