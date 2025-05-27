@@ -50,3 +50,14 @@ echo "Size of output2.bin: $(stat --printf="%s" output2.bin) bytes"
 # Clean up: delete virtual disk
 echo -e "\nRemoving virtual disk 'disk.vd'..."
 ./vfs dremove disk.vd
+
+# Creating very small disk
+echo -e "\nCreating very small disk 'small.vd' (1024 bytes)..."
+./vfs dmake small.vd 8096 # 8 KB, which is smaller than the file we will try to write
+
+# Write a file bigger than the disk size
+echo -e "\nAttempting to write a file larger than the disk size (should fail)..."
+./vfs dput small.vd borat.mp4
+
+# Clean up: delete small disk
+echo -e "\nRemoving small disk 'small.vd'..."
