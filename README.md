@@ -44,3 +44,8 @@ Upsides and downsides:
   - Not suitable for proper OS.
   - Internal fragmentation is a problem, due to fixed-size blocks.
   - File limit (64 files), drive size limit (4KB to 100MB), but can be changed in the code.
+
+ # License
+
+ This project is licensed under the GNU General Public License v3.0.
+ See the [LICENSE](LICENSE) file for details.
